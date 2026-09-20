@@ -1611,11 +1611,7 @@
     var c = currentChat();
     if(!c) return;
 
-    if(!sampleApi){
-      showToast("Jarvis's AI isn't available in this view — open it from claude.ai to chat.", 4200);
-      return;
-    }
-
+   
     addMessage(c.id, 'user', text);
     emptyState.style.display = 'none';
     orbStage.classList.add('compact');
