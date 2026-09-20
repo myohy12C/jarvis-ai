@@ -711,27 +711,7 @@
   }
 
   /* ---------- TOAST ---------- */
-  .frame-banner{
-    display:none;
-    align-items:center;
-    gap:12px;
-    flex-wrap:wrap;
-    background:#1a1006;
-    border-bottom:1px solid rgba(255,140,50,0.35);
-    color:var(--text-dim);
-    font-size:12.5px;
-    padding:8px 14px;
-    position:relative;
-    z-index:300;
-  }
-  .frame-banner.show{display:flex;}
-  .frame-banner span{flex:1 1 260px;min-width:240px;line-height:1.5;}
-  .frame-banner b{color:var(--accent-2);}
-  .frame-banner button{
-    margin-left:auto;
-    background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:13px;
-  }
-  .frame-banner button:hover{color:var(--text);}
+  
 
   .toast{
     position:fixed;
@@ -782,8 +762,7 @@
 </head>
 <body>
 
-<div class="frame-banner" id="frameBanner">
-  <span>Voice <b>input</b> is blocked by Claude's artifact sandbox (security restriction — applies here no matter which tab this is in). Typing and spoken <b>replies</b> both work fully. For real mic input, download this file (below) and host it yourself — e.g. GitHub Pages or Netlify, both free.</span>
+
   <button id="frameBannerClose" title="Dismiss">✕</button>
 </div>
 
@@ -1837,29 +1816,34 @@
     };
     return r;
   }
+function primeMicrophone(){
+  return new Promise(function(resolve){
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      showToast('Microphone access is not supported by this browser.', 4200);
+      resolve(false);
+      return;
+    }
 
-  function primeMicrophone(){
-    return new Promise(function(resolve){
-      if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-        resolve(true);
-        return;
-      }
-      navigator.mediaDevices.getUserMedia({ audio:true }).then(function(stream){
-        stream.getTracks().forEach(function(t){ t.stop(); });
-        resolve(true);
-      }).catch(function(err){
-        console.error('mic permission error', err);
-        if(err && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')){
-          showToast("Microphone access is blocked here — Claude's artifact sandbox restricts it for security, on both the preview and the published page. Voice replies still work. For real mic input, download this file and host it yourself (e.g. GitHub Pages, Netlify).", 8000);
-        } else if(err && err.name === 'NotFoundError'){
-          showToast('No microphone was found on this device.', 4200);
-        } else {
-          showToast("Couldn't access the microphone — try again.", 4200);
-        }
-        resolve(false);
+    navigator.mediaDevices.getUserMedia({ audio:true }).then(function(stream){
+      stream.getTracks().forEach(function(track){
+        track.stop();
       });
+      resolve(true);
+    }).catch(function(err){
+      console.error('Microphone permission error:', err);
+
+      if(err && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')){
+        showToast("Microphone permission was denied. Click the microphone icon in your browser's address bar and allow microphone access.", 6500);
+      } else if(err && err.name === 'NotFoundError'){
+        showToast('No microphone was found on this device.', 4200);
+      } else {
+        showToast("Couldn't access the microphone. Check your browser's microphone permissions and try again.", 5000);
+      }
+
+      resolve(false);
     });
-  }
+  });
+}
 
   function toggleListening(){
     var SR = getSRConstructor();
@@ -1967,15 +1951,7 @@
 
   /* ============ INIT ============ */
   function init(){
-    var banner = document.getElementById('frameBanner');
-    var closeBtn = document.getElementById('frameBannerClose');
-    var bannerDismissed = false;
-    try{ bannerDismissed = localStorage.getItem('jarvis_mic_notice_dismissed_v1') === '1'; }catch(e){}
-    if(banner && !bannerDismissed) banner.classList.add('show');
-    if(closeBtn) closeBtn.addEventListener('click', function(){
-      banner.classList.remove('show');
-      try{ localStorage.setItem('jarvis_mic_notice_dismissed_v1', '1'); }catch(e){}
-    });
+
     buildMiniOrb();
     setOrbState('idle');
 
