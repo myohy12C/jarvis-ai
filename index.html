@@ -1635,20 +1635,65 @@ var turns = buildTurns(c);
 currentAbort = (typeof AbortController !== 'undefined')
   ? new AbortController()
   : null;
-
 var finalText = '';
 
-try {
-  var response = await fetch('/api/chat', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      messages: turns
-    }),
-    signal: currentAbort ? currentAbort.signal : undefined
+fetch('/api/chat', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    messages: turns
+  }),
+  signal: currentAbort ? currentAbort.signal : undefined
+})
+.then(function(response) {
+  return response.json().then(function(data) {
+    if (!response.ok) {
+      throw new Error(data.error || 'Groq request failed');
+    }
+    return data;
   });
+})
+.then(function(data) {
+  finalText = (data.text || '').trim();
+
+  if (!finalText) {
+    finalText = "I didn't get a response from Groq.";
+  }
+
+  streamBubble.textContent = finalText;
+  streamBubble.classList.remove('streaming');
+
+  if (streamBubble.parentElement) {
+    streamBubble.parentElement.classList.remove('msg-error');
+  }
+
+  sendBtn.disabled = false;
+  currentAbort = null;
+  setOrbState('idle');
+
+  if (settings.autoSpeak) {
+    speakText(finalText);
+  }
+})
+.catch(function(err) {
+  console.error('Groq request failed:', err);
+
+  streamBubble.textContent =
+    'Jarvis could not connect to the AI: ' +
+    (err.message || 'Please try again.');
+
+  streamBubble.classList.remove('streaming');
+
+  if (streamBubble.parentElement) {
+    streamBubble.parentElement.classList.add('msg-error');
+  }
+
+  sendBtn.disabled = false;
+  currentAbort = null;
+  setOrbState('idle');
+});
 
   var data = await response.json();
 
