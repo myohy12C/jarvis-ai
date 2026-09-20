@@ -1435,22 +1435,9 @@
   var dbApi = null;
 
   function initClaude(){
-    try{
-      if(window.claude && typeof window.claude.use === 'function'){
-        window.claude.use('sample').then(function(api){
-          sampleApi = api;
-          if(!sampleApi){
-            showToast("Jarvis's AI isn't available in this view — open it from claude.ai to chat.", 5000);
-          }
-        }).catch(function(e){ console.error('claude.use failed', e); sampleApi = null; });
-
-        window.claude.use('db').then(function(api){
-          dbApi = api;
-          if(dbApi) initCloudSync();
-        }).catch(function(e){ console.error('db use failed', e); dbApi = null; });
-      }
-    }catch(e){ console.error(e); }
-  }
+  sampleApi = null;
+  dbApi = null;
+}
 
   /* ---- Cloud sync: chats follow the account across devices, not the file ---- */
   function cloudSyncChat(c){
@@ -1642,50 +1629,67 @@
     sendBtn.disabled = true;
     setOrbState('thinking');
 
-    var streamBubble = appendStreamingBubble();
-    var turns = buildTurns(c);
-    currentAbort = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+   var streamBubble = appendStreamingBubble();
+var turns = buildTurns(c);
 
-    var opts = {
-      modelTier: 'default',
-      tools: [openTabTool, pinNoteTool],
-      onText: function(payload){
-        var whole = (payload && payload.text) || '';
-        streamBubble.textContent = whole;
-        scrollToBottom();
-      }
-    };
-    if(currentAbort) opts.signal = currentAbort.signal;
+currentAbort = (typeof AbortController !== 'undefined')
+  ? new AbortController()
+  : null;
 
-    sampleApi(turns, opts).then(function(res){
-      var finalText = (res && res.text) ? res.text.trim() : '';
-      if(!finalText) finalText = "I didn't catch a response there — try again?";
-      messagesEl.removeChild(streamBubble.parentElement);
-      addMessage(c.id, 'assistant', finalText);
-      renderSidebar();
-      messagesEl.appendChild(buildMessageEl(c.messages[c.messages.length-1]));
-      scrollToBottom();
-      sendBtn.disabled = false;
-      currentAbort = null;
-      if(settings.autoSpeak){
-        speakText(finalText);
-      } else {
-        setOrbState('idle');
-      }
-    }).catch(function(err){
-      console.error('sample() failed', err);
-      var msg = 'That response got interrupted — try again.';
-      if(err && err.code === 'not_granted') msg = "Jarvis's AI access isn't granted in this session.";
-      else if(err && err.code === 'rate_limited') msg = 'Jarvis is getting a lot of requests — give it a moment.';
-      else if(err && err.code === 'cancelled') msg = '(stopped)';
-      streamBubble.textContent = msg;
-      streamBubble.classList.remove('streaming');
-      streamBubble.parentElement.classList.add('msg-error');
-      sendBtn.disabled = false;
-      currentAbort = null;
-      setOrbState('idle');
-    });
+var finalText = '';
+
+try {
+  var response = await fetch('/api/chat', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      messages: turns
+    }),
+    signal: currentAbort ? currentAbort.signal : undefined
+  });
+
+  var data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Groq request failed');
   }
+
+  finalText = (data.text || '').trim();
+
+  if (!finalText) {
+    finalText = "I didn't get a response from Groq.";
+  }
+
+  streamBubble.textContent = finalText;
+  streamBubble.classList.remove('streaming');
+
+  if (streamBubble.parentElement) {
+    streamBubble.parentElement.classList.remove('msg-error');
+  }
+
+} catch (err) {
+  console.error('Groq request failed:', err);
+
+  streamBubble.textContent =
+    'Jarvis could not connect to the AI. ' +
+    (err.message || 'Please try again.');
+
+  streamBubble.classList.remove('streaming');
+
+  if (streamBubble.parentElement) {
+    streamBubble.parentElement.classList.add('msg-error');
+  }
+}
+
+sendBtn.disabled = false;
+currentAbort = null;
+setOrbState('idle');
+
+if (finalText && settings.autoSpeak) {
+  speakText(finalText);
+}
 
   function stopGenerating(){
     if(currentAbort){ try{ currentAbort.abort(); }catch(e){} }
@@ -1985,7 +1989,7 @@ function primeMicrophone(){
 
     renderSidebar();
     renderChatView();
-    initClaude();
+  
   }
 
   if(document.readyState === 'loading'){
